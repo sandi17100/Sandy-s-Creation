@@ -746,6 +746,24 @@ def track_order_search():
             flash("Order not found. Please check Order ID and Email.", "error")
 
     return render_template("track_order_search.html")
+@app.route("/fix-admin")
+def fix_admin():
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO admins (username, password_hash)
+        VALUES (%s, %s)
+    """, (
+        "sandy",
+        generate_password_hash("crochet123")
+    ))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return "Admin created successfully"
 
 
 @app.route("/track-order/<int:order_id>")
