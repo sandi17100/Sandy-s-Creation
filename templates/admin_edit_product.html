@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Product - Admin{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-lg">
+            <div class="card-header bg-warning text-white text-center py-4">
+                <h2 class="mb-0 fw-bold"><i class="fas fa-edit me-2"></i>Edit Product</h2>
+                <small class="opacity-75">Update {{ product.name }}</small>
+            </div>
+            <div class="card-body p-5">
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="row">
+                        <div class="col-md-6 mb-4">
+                            <label class="form-label fw-bold">Product Name 🧸</label>
+                            <input type="text" name="name" class="form-control form-control-lg rounded-pill px-4" 
+                                   value="{{ product.name }}" required>
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <label class="form-label fw-bold">Price MMK 💰</label>
+                            <input type="number" name="price" step="0.01" min="0" 
+                                   class="form-control form-control-lg rounded-pill px-4" 
+                                   value="{{ product.price }}" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-4">
+                            <label class="form-label fw-bold">Stock Quantity 📦</label>
+                            <input type="number" name="stock" min="0" 
+                                   class="form-control form-control-lg rounded-pill px-4" 
+                                   value="{{ product.stock }}" required>
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <label class="form-label fw-bold">Category</label>
+                            <select name="category" class="form-select form-control-lg rounded-pill px-4">
+                                <option value="amigurumi" {% if product.category == 'amigurumi' %}selected{% endif %}>Amigurumi</option>
+                                <option value="pattern" {% if product.category == 'pattern' %}selected{% endif %}>Pattern</option>
+                                <option value="kit" {% if product.category == 'kit' %}selected{% endif %}>Kit</option>
+                                <option value="accessory" {% if product.category == 'accessory' %}selected{% endif %}>Accessory</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Description ✍️</label>
+                        <textarea name="description" rows="4" 
+                                  class="form-control rounded-4 px-4 py-3" required>{{ product.description }}</textarea>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Current Image 📸</label>
+                        {% if product.image %}
+                        <div class="text-center mb-3 p-3 bg-light rounded-4">
+                            <img src="{{ url_for('static', filename='uploads/' + product.image) }}" 
+                                 class="rounded-4 shadow" style="width: 200px; height: 200px; object-fit: cover;">
+                            <div class="mt-2">
+                                <small class="text-muted">{{ product.image }}</small>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="bg-light rounded-4 p-4 text-center">
+                            <i class="fas fa-image fa-3x text-muted mb-2"></i>
+                            <p class="text-muted mb-0">No image set</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">New Image (optional) 🔄</label>
+                        <input type="file" name="image" accept="image/*" class="form-control">
+                        <div class="form-text">Upload new image to replace current one. Leave empty to keep existing.</div>
+                    </div>
+                    
+                    <div class="d-grid gap-3">
+                        <button type="submit" class="btn btn-warning btn-lg rounded-pill py-3 fw-bold fs-5">
+                            <i class="fas fa-save me-2"></i>Update Product Now
+                        </button>
+                        <a href="{{ url_for('admin_products') }}" class="btn btn-outline-secondary rounded-pill py-3">
+                            ← Back to Products
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

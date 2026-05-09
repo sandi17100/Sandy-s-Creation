@@ -1,0 +1,5 @@
+Flask==3.0.0
+Flask-Login
+Flask-WTF==1.2.1
+Werkzeug
+gunicorn

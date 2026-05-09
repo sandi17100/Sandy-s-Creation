@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if single_order %}Order #{{ order.id }}{% else %}All Orders{% endif %}
+{% endblock %}
+
+{% block content %}
+
+{% if single_order %}
+<h1>Order #{{ order.id }}</h1>
+<div class="row mb-4">
+    <!-- Customer Info -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Customer Information</div>
+            <div class="card-body">
+                <p><strong>Name:</strong> {{ order.name }}</p>
+                <p><strong>Email:</strong> {{ order.email }}</p>
+                <p><strong>Phone:</strong> {{ order.phone or 'N/A' }}</p>
+                <p><strong>Address:</strong> {{ order.address }}</p>
+                <p><strong>Date:</strong> {{ order.created_at.strftime('%d/%m %H:%M') }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Order Summary & Status -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Order Summary</div>
+            <div class="card-body">
+                <p><strong>Total:</strong> {{ "{:,.0f}".format(order.total) }} MMK</p>
+                <form method="POST" action="{{ url_for('admin_update_order_status', order_id=order.id) }}">
+                    <div class="mb-2">
+                        <label><strong>Status:</strong></label>
+                        <select name="status" class="form-select" {% if order.status=='delivered' %}disabled{% endif %}>
+                            <option value="pending" {% if order.status=='pending' %}selected{% endif %}>Pending</option>
+                            <option value="paid" {% if order.status=='paid' %}selected{% endif %}>Paid</option>
+                            <option value="processing" {% if order.status=='processing' %}selected{% endif %}>Processing</option>
+                            <option value="delivered" {% if order.status=='delivered' %}selected{% endif %}>Delivered</option>
+                            <option value="cancelled" {% if order.status=='cancelled' %}selected{% endif %}>Cancelled</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-success btn-sm">Update Status</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Order Items Table -->
+<h3>Order Items</h3>
+<table class="table table-hover">
+    <thead>
+        <tr>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Price</th>
+            <th>Total</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in order_items %}
+        <tr>
+            <td>{{ item.name }}</td>
+            <td>{{ item.quantity }}</td>
+            <td>{{ "{:,.0f}".format(item.price) }} MMK</td>
+            <td>{{ "{:,.0f}".format(item.price * item.quantity) }} MMK</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<a href="{{ url_for('admin_orders') }}" class="btn btn-primary mt-3">Back to Orders</a>
+
+{% else %}
+<!-- All Orders Table -->
+<h1>All Orders</h1>
+<table class="table table-hover">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Total</th>
+            <th>Status</th>
+            <th>Date</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for order in orders %}
+        <tr class="{% if order.status=='pending' %}table-warning{% elif order.status=='cancelled' %}table-danger{% endif %}">
+            <td>#{{ order.id }}</td>
+            <td>{{ order.name }}</td>
+            <td>{{ order.email }}</td>
+            <td>{{ "{:,.0f}".format(order.total) }} MMK</td>
+            <td>
+                <span class="badge 
+                    {% if order.status=='pending' %}bg-secondary
+                    {% elif order.status=='paid' %}bg-primary
+                    {% elif order.status=='processing' %}bg-warning
+                    {% elif order.status=='delivered' %}bg-success
+                    {% elif order.status=='cancelled' %}bg-danger
+                    {% endif %}
+                ">
+                    {{ order.status.title() }}
+                </span>
+            </td>
+            <td>{{ order.created_at.strftime('%d/%m %H:%M') }}</td>
+            <td>
+                <a href="{{ url_for('admin_order_detail', order_id=order.id) }}" class="btn btn-sm btn-info">View</a>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center">No orders yet</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<a href="{{ url_for('admin_dashboard') }}" class="btn btn-primary mt-3">Back to Dashboard</a>
+{% endif %}
+
+{% endblock %}

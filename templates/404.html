@@ -1,0 +1,18 @@
+<!-- templates/404.html -->
+{% extends "base.html" %}
+
+{% block title %}Page Not Found{% endblock %}
+
+{% block content %}
+<div class="container my-5 text-center">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <i class="bi bi-exclamation-triangle-fill fs-1 text-warning mb-4"></i>
+            <h1 class="display-1 fw-bold mb-4" style="color: var(--primary-color);">404</h1>
+            <h2 class="mb-4">Oops! Page Not Found</h2>
+            <p class="lead mb-4">The page you're looking for doesn't exist or has been moved.</p>
+            <a href="{{ url_for('index') }}" class="btn btn-crochet btn-lg">🧶 Back to Shop</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

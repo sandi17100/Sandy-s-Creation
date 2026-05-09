@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Add Product - Admin{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-lg">
+            <div class="card-header bg-primary text-white text-center py-4">
+                <h2 class="mb-0 fw-bold"><i class="fas fa-plus-circle me-2"></i>Add New Product</h2>
+            </div>
+            <div class="card-body p-5">
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="row">
+                        <div class="col-md-6 mb-4">
+                            <label class="form-label fw-bold">Product Name 🧸</label>
+                            <input type="text" name="name" class="form-control form-control-lg rounded-pill px-4" 
+                                   placeholder="e.g. Cute Panda Amigurumi" required>
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <label class="form-label fw-bold">Price MMK 💰</label>
+                            <input type="number" name="price" step="0.01" min="0" 
+                                   class="form-control form-control-lg rounded-pill px-4" placeholder="5000" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-4">
+                            <label class="form-label fw-bold">Stock Quantity 📦</label>
+                            <input type="number" name="stock" min="0" 
+                                   class="form-control form-control-lg rounded-pill px-4" placeholder="10" required>
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <label class="form-label fw-bold">Category</label>
+                            <select name="category" class="form-select form-control-lg rounded-pill px-4">
+                                <option value="amigurumi">Amigurumi</option>
+                                <option value="pattern">Pattern</option>
+                                <option value="kit">Kit</option>
+                                <option value="accessory">Accessory</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Description ✍️</label>
+                        <textarea name="description" rows="4" 
+                                  class="form-control rounded-4 px-4 py-3" 
+                                  placeholder="Handmade with love... 100% cotton yarn... Perfect gift..."></textarea>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Product Images 📸 (Optional, multiple)</label>
+                        <input type="file" name="images" accept="image/*" multiple class="form-control">
+                        <div class="form-text">You can upload multiple images. Recommended: 400x400px, JPG/PNG</div>
+                    </div>
+                    
+                    <div class="d-grid gap-3">
+                        <button type="submit" class="btn btn-primary btn-lg rounded-pill py-3 fw-bold fs-5">
+                            <i class="fas fa-save me-2"></i>Add Product Now
+                        </button>
+                        <a href="{{ url_for('admin_products') }}" class="btn btn-outline-secondary rounded-pill py-3">
+                            ← Back to Products
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

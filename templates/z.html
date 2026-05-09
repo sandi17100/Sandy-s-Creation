@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Order #{{ order[0] }}{% endblock %}
+
+{% block content %}
+<h1>Order #{{ order[0] }}</h1>
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Customer Information</div>
+            <div class="card-body">
+                <p><strong>Name:</strong> {{ order[1] }}</p>
+                <p><strong>Email:</strong> {{ order[2] }}</p>
+                <p><strong>Phone:</strong> {{ order[3] or 'N/A' }}</p>
+                <p><strong>Address:</strong> {{ order[4] }}</p>
+                <p><strong>Date:</strong> {{ order[7] }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Order Summary</div>
+            <div class="card-body">
+                <p><strong>Total: ${{ "%.2f"|format(order[6]) }}</strong></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h3>Order Items</h3>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Price</th>
+            <th>Total</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in order_items %}
+        <tr>
+            <td>{{ item.name }}</td>
+            <td>{{ item.quantity }}</td>
+            <td>${{ "%.2f"|format(item.price) }}</td>
+            <td>${{ "%.2f"|format(item.price * item.quantity) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<a href="{{ url_for('admin') }}" class="btn btn-primary">Back to Dashboard</a>
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Checkout - E-Store{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h2><i class="fas fa-credit-card"></i> Checkout</h2>
+        <form method="POST">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Full Name *</label>
+                    <input type="text" name="name" class="form-control" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Email *</label>
+                    <input type="email" name="email" class="form-control" required>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Phone</label>
+                <input type="tel" name="phone" class="form-control">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Delivery Address *</label>
+                <textarea name="address" class="form-control" rows="4" required></textarea>
+            </div>
+            <button type="submit" class="btn btn-success btn-lg">
+                <i class="fas fa-lock"></i> Place Order - MMK{{ "%.2f"|format(total) }}
+            </button>
+            <a href="{{ url_for('cart') }}" class="btn btn-outline-secondary btn-lg ms-2">Back to Cart</a>
+        </form>
+    </div>
+    <div class="col-md-4">
+        <div class="card sticky-top" style="top: 20px;">
+            <div class="card-header">
+                <h5>Order Summary</h5>
+            </div>
+            <div class="card-body">
+                {% for item in cart %}
+                <div class="d-flex justify-content-between mb-2">
+                    <span>{{ item.name }} (x{{ item.quantity }})</span>
+                    <span>MMK{{ "%.2f"|format(item.price * item.quantity) }}</span>
+                </div>
+                {% endfor %}
+                <hr>
+                <div class="d-flex justify-content-between fw-bold fs-5">
+                    <span>Total:</span>
+                    <span class="text-success">MMK{{ "%.2f"|format(total) }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
