@@ -2,110 +2,112 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from decimal import Decimal
 import psycopg2
 from psycopg2.extras import RealDictCursor
-import json
 import os
+import json
 from datetime import datetime
 
-
+# ---------------- APP INIT ----------------
 app = Flask(__name__)
-app.secret_key = os.environ.get(
-    'SECRET_KEY',
-    'sandy-crochet-2026-super-secret-key-change-production!'
-)
 
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
+app.secret_key = os.environ.get("SECRET_KEY")
 
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+if not app.secret_key:
+    raise Exception("SECRET_KEY must be set in environment variables")
 
+# ---------------- CONFIG ----------------
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "admin_login"
 
-
-# ---------------- FILE UPLOAD HELPERS ----------------
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-
-# ---------------- DATABASE ----------------
+# ---------------- SUPABASE DATABASE ----------------
 DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise Exception("DATABASE_URL is not set (Supabase Postgres required)")
 
 
 def get_db():
-    conn = psycopg2.connect(
+    return psycopg2.connect(
         DATABASE_URL,
-        cursor_factory=RealDictCursor
+        cursor_factory=RealDictCursor,
+        connect_timeout=10
     )
-    return conn
 
 
+# ---------------- HELPERS ----------------
+def allowed_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+# ---------------- DATABASE INIT (SUPABASE READY) ----------------
 def init_db():
-    with app.app_context():
-        db = get_db()
-        cursor = db.cursor()
+    conn = get_db()
+    cursor = conn.cursor()
 
-        # Products table
+    # PRODUCTS (FIXED FOR SUPABASE)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS products (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL,
+            price REAL NOT NULL,
+            image TEXT,
+            images JSONB,
+            stock INTEGER DEFAULT 0,
+            category TEXT DEFAULT 'amigurumi',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # ORDERS
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS orders (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL,
+            phone TEXT,
+            address TEXT NOT NULL,
+            items JSONB NOT NULL,
+            total REAL NOT NULL,
+            status TEXT DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # ADMINS
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS admins (
+            id SERIAL PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # DEFAULT ADMIN (SAFE)
+    cursor.execute("SELECT COUNT(*) AS count FROM admins")
+    admin_count = cursor.fetchone()["count"]
+
+    if admin_count == 0:
+        admin_password = os.environ.get("ADMIN_PASSWORD")
+
+        if not admin_password:
+            raise Exception("ADMIN_PASSWORD not set in environment variables")
+
+        pwd_hash = generate_password_hash(admin_password)
+
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS products (
-                id SERIAL PRIMARY KEY,
-                name TEXT NOT NULL,
-                description TEXT NOT NULL,
-                price REAL NOT NULL,
-                image TEXT,
-                images TEXT,
-                stock INTEGER DEFAULT 0,
-                category TEXT DEFAULT 'amigurumi',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+            INSERT INTO admins (username, password_hash)
+            VALUES (%s, %s)
+        """, ("sandy", pwd_hash))
 
-        # Orders table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS orders (
-                id SERIAL PRIMARY KEY,
-                name TEXT NOT NULL,
-                email TEXT NOT NULL,
-                phone TEXT,
-                address TEXT NOT NULL,
-                items TEXT NOT NULL,
-                total REAL NOT NULL,
-                status TEXT DEFAULT 'pending',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        # Admins table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS admins (
-                id SERIAL PRIMARY KEY,
-                username TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        # Insert default admin if not exists
-        cursor.execute("SELECT COUNT(*) AS count FROM admins")
-        admin_count = cursor.fetchone()["count"]
-
-        if admin_count == 0:
-            pwd_hash = generate_password_hash('crochet123')
-            cursor.execute(
-                """
-                INSERT INTO admins (username, password_hash)
-                VALUES (%s, %s)
-                """,
-                ('sandy', pwd_hash)
-            )
-
-        db.commit()
-        cursor.close()
-        db.close()
+    conn.commit()
+    cursor.close()
+    conn.close()
 # ---------------- MODELS ----------------
 class AdminUser(UserMixin):
     def __init__(self, id, username):
@@ -113,250 +115,315 @@ class AdminUser(UserMixin):
         self.username = username
 
 
+# ---------------- USER LOADER ----------------
 @login_manager.user_loader
 def load_user(user_id):
     conn = get_db()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    cursor.execute(
-        "SELECT id, username FROM admins WHERE id = %s",
-        (user_id,)
-    )
-    user = cursor.fetchone()
+        cursor.execute(
+            "SELECT id, username FROM admins WHERE id = %s",
+            (user_id,)
+        )
 
-    cursor.close()
-    conn.close()
+        user = cursor.fetchone()
 
-    if user:
-        return AdminUser(user['id'], user['username'])
-    return None
+        if user:
+            return AdminUser(user["id"], user["username"])
+
+        return None
+
+    finally:
+        cursor.close()
+        conn.close()
 
 
+# ---------------- PRODUCT QUERIES ----------------
 def get_products():
     conn = get_db()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    cursor.execute(
-        "SELECT * FROM products WHERE stock > 0 ORDER BY created_at DESC"
-    )
-    products = cursor.fetchall()
+        cursor.execute("""
+            SELECT * FROM products
+            WHERE stock > 0
+            ORDER BY created_at DESC
+        """)
 
-    cursor.close()
-    conn.close()
-    return products
+        return cursor.fetchall()
+
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def get_all_products():
     conn = get_db()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    cursor.execute(
-        "SELECT * FROM products ORDER BY created_at DESC"
-    )
-    products = cursor.fetchall()
+        cursor.execute("""
+            SELECT * FROM products
+            ORDER BY created_at DESC
+        """)
 
-    cursor.close()
-    conn.close()
-    return products
+        return cursor.fetchall()
 
-
-def get_order_by_id(order_id):
-    conn = get_db()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        "SELECT * FROM orders WHERE id = %s",
-        (order_id,)
-    )
-    order = cursor.fetchone()
-
-    cursor.close()
-    conn.close()
-    return order
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def get_product(product_id):
     conn = get_db()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    cursor.execute(
-        "SELECT * FROM products WHERE id = %s",
-        (product_id,)
-    )
-    product = cursor.fetchone()
+        cursor.execute(
+            "SELECT * FROM products WHERE id = %s",
+            (product_id,)
+        )
 
-    cursor.close()
-    conn.close()
-    return product
+        return cursor.fetchone()
+
+    finally:
+        cursor.close()
+        conn.close()
 
 
-def add_product(name, description, price, image, images, stock, category='amigurumi'):
+# ---------------- ORDER QUERIES ----------------
+def get_order_by_id(order_id):
     conn = get_db()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    cursor.execute("""
-        INSERT INTO products
-        (name, description, price, image, images, stock, category)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """, (
-        name,
-        description,
-        float(price),
-        image,
-        json.dumps(images),
-        stock,
-        category
-    ))
+        cursor.execute(
+            "SELECT * FROM orders WHERE id = %s",
+            (order_id,)
+        )
 
-    conn.commit()
-    cursor.close()
-    conn.close()
+        return cursor.fetchone()
 
-
-def update_product(product_id, name, description, price, image, stock):
-    conn = get_db()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        UPDATE products
-        SET name=%s, description=%s, price=%s, image=%s, stock=%s
-        WHERE id=%s
-    """, (
-        name,
-        description,
-        float(price),
-        image,
-        stock,
-        product_id
-    ))
-
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-
-def delete_product(product_id):
-    conn = get_db()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        "DELETE FROM products WHERE id=%s",
-        (product_id,)
-    )
-
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-
-def save_order(name, email, phone, address, items_json, total):
-    conn = get_db()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        INSERT INTO orders
-        (name, email, phone, address, items, total)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        RETURNING id
-    """, (
-        name,
-        email,
-        phone,
-        address,
-        items_json,
-        float(total)
-    ))
-
-    order_id = cursor.fetchone()["id"]
-
-    conn.commit()
-    cursor.close()
-    conn.close()
-    return order_id
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def get_all_orders():
     conn = get_db()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    cursor.execute(
-        "SELECT * FROM orders ORDER BY created_at DESC"
-    )
-    orders = cursor.fetchall()
+        cursor.execute("""
+            SELECT * FROM orders
+            ORDER BY created_at DESC
+        """)
 
-    cursor.close()
-    conn.close()
-    return orders
+        return cursor.fetchall()
+
+    finally:
+        cursor.close()
+        conn.close()
 
 
+# ---------------- INSERT PRODUCT (SUPABASE SAFE) ----------------
+def add_product(name, description, price, image, images, stock, category="amigurumi"):
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO products
+            (name, description, price, image, images, stock, category)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (
+            name,
+            description,
+            float(price),
+            image,
+            json.dumps(images) if images else None,
+            int(stock),
+            category
+        ))
+
+        conn.commit()
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ---------------- UPDATE PRODUCT ----------------
+def update_product(product_id, name, description, price, image, stock):
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE products
+            SET name=%s,
+                description=%s,
+                price=%s,
+                image=%s,
+                stock=%s
+            WHERE id=%s
+        """, (
+            name,
+            description,
+            float(price),
+            image,
+            int(stock),
+            product_id
+        ))
+
+        conn.commit()
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ---------------- DELETE PRODUCT ----------------
+def delete_product(product_id):
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "DELETE FROM products WHERE id=%s",
+            (product_id,)
+        )
+
+        conn.commit()
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ---------------- SAVE ORDER (SUPABASE JSONB SAFE) ----------------
+def save_order(name, email, phone, address, items_json, total):
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO orders
+            (name, email, phone, address, items, total)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            name,
+            email,
+            phone,
+            address,
+            json.dumps(items_json) if isinstance(items_json, list) else items_json,
+            float(total)
+        ))
+
+        order_id = cursor.fetchone()["id"]
+
+        conn.commit()
+        return order_id
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ---------------- ORDER STATUS ----------------
 def update_order_status(order_id, status):
     conn = get_db()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    cursor.execute(
-        "UPDATE orders SET status = %s WHERE id = %s",
-        (status, order_id)
-    )
+        cursor.execute("""
+            UPDATE orders
+            SET status = %s
+            WHERE id = %s
+        """, (status, order_id))
 
-    conn.commit()
-    cursor.close()
-    conn.close()
+        conn.commit()
+
+    finally:
+        cursor.close()
+        conn.close()
 # ---------------- CART FUNCTIONS ----------------
 def add_item_to_cart(product_id):
     product = get_product(product_id)
 
-    if not product or product['stock'] <= 0:
+    if not product or product["stock"] <= 0:
         return False
 
     cart = session.get("cart", [])
+    product_id = int(product_id)
 
     for item in cart:
-        if item["id"] == product_id:
-            if item["quantity"] < product['stock']:
+        if int(item["id"]) == product_id:
+
+            if item["quantity"] < product["stock"]:
                 item["quantity"] += 1
+
             session["cart"] = cart
+            session.modified = True
             return True
 
     cart.append({
         "id": product_id,
-        "name": product['name'],
-        "price": float(product['price']),
+        "name": product["name"],
+        "price": float(product["price"]),
         "quantity": 1,
-        "image": product['image']
+        "image": product.get("image")
     })
 
     session["cart"] = cart
+    session.modified = True
     return True
 
 
+# ---------------- UPDATE CART ----------------
 def update_cart_quantity(product_id, quantity):
     cart = session.get("cart", [])
+    product_id = int(product_id)
+
+    try:
+        quantity = int(quantity)
+    except:
+        quantity = 0
+
+    updated_cart = []
 
     for item in cart:
-        if item["id"] == product_id:
-            item["quantity"] = int(quantity)
-            break
+        if int(item["id"]) == product_id:
+            item["quantity"] = quantity
 
-    session["cart"] = [
-        item for item in cart
-        if item["quantity"] > 0
-    ]
+        if item["quantity"] > 0:
+            updated_cart.append(item)
+
+    session["cart"] = updated_cart
+    session.modified = True
 
 
+# ---------------- TOTAL CALCULATION ----------------
 def calculate_cart_total(cart):
     if not cart:
         return 0.0
 
     return float(
-        sum(float(item["price"]) * item["quantity"] for item in cart)
+        sum(float(item["price"]) * int(item["quantity"]) for item in cart)
     )
+
+
 # ---------------- ROUTES ----------------
+
 @app.route("/")
 def index():
     products = get_products()
     return render_template("index.html", products=products)
 
 
+# ---------------- PRODUCT PAGE ----------------
 @app.route("/product/<int:product_id>")
 def product(product_id):
     product = get_product(product_id)
@@ -367,19 +434,21 @@ def product(product_id):
 
     product = dict(product)
 
+    # SAFE JSON HANDLING (Supabase JSONB ready)
     product_images = product.get("images")
 
     if product_images:
         try:
             product["images"] = json.loads(product_images)
         except:
-            product["images"] = product_images.split(",")
+            product["images"] = []
     else:
         product["images"] = []
 
     return render_template("product.html", product=product)
 
 
+# ---------------- CART ROUTES ----------------
 @app.route("/add_to_cart/<int:product_id>")
 def add_to_cart(product_id):
     if add_item_to_cart(product_id):
@@ -400,7 +469,7 @@ def cart():
 
 @app.route("/update_cart/<int:product_id>", methods=["POST"])
 def update_cart(product_id):
-    quantity = int(request.form.get("quantity", 0))
+    quantity = request.form.get("quantity", 0)
     update_cart_quantity(product_id, quantity)
 
     flash("Cart updated!", "info")
@@ -410,16 +479,20 @@ def update_cart(product_id):
 @app.route("/remove_from_cart/<int:product_id>")
 def remove_from_cart(product_id):
     cart = session.get("cart", [])
+    product_id = int(product_id)
 
     session["cart"] = [
         item for item in cart
-        if item["id"] != product_id
+        if int(item["id"]) != product_id
     ]
+
+    session.modified = True
 
     flash("Item removed", "info")
     return redirect(url_for("cart"))
 
 
+# ---------------- CHECKOUT ----------------
 @app.route("/checkout", methods=["GET", "POST"])
 def checkout():
     cart_items = session.get("cart", [])
@@ -441,9 +514,10 @@ def checkout():
             return render_template("checkout.html", cart=cart_items, total=total)
 
         if phone and not phone.startswith(("09", "+959")):
-            flash("Please enter valid Myanmar phone number (09xxxxxxxxx)", "error")
+            flash("Invalid Myanmar phone number", "error")
             return render_template("checkout.html", cart=cart_items, total=total)
 
+        # SAFE JSON FOR SUPABASE JSONB
         items_json = json.dumps(cart_items)
 
         order_id = save_order(
@@ -458,7 +532,7 @@ def checkout():
         session.pop("cart", None)
 
         flash(
-            f"🎉 Order placed successfully! Your Order ID is #{order_id}",
+            f"🎉 Order placed successfully! Order ID #{order_id}",
             "success"
         )
 
@@ -476,19 +550,22 @@ def admin_login():
         password = request.form.get("password")
 
         conn = get_db()
-        cursor = conn.cursor()
+        try:
+            cursor = conn.cursor()
 
-        cursor.execute(
-            "SELECT * FROM admins WHERE username = %s",
-            (username,)
-        )
-        admin = cursor.fetchone()
+            cursor.execute(
+                "SELECT * FROM admins WHERE username = %s",
+                (username,)
+            )
 
-        cursor.close()
-        conn.close()
+            admin = cursor.fetchone()
 
-        if admin and check_password_hash(admin['password_hash'], password):
-            login_user(AdminUser(admin['id'], admin['username']))
+        finally:
+            cursor.close()
+            conn.close()
+
+        if admin and check_password_hash(admin["password_hash"], password):
+            login_user(AdminUser(admin["id"], admin["username"]))
             flash("Welcome back, Sandy! 👋", "success")
             return redirect(url_for("admin_dashboard"))
 
@@ -497,6 +574,7 @@ def admin_login():
     return render_template("admin_login.html")
 
 
+# ---------------- LOGOUT ----------------
 @app.route("/admin/logout")
 @login_required
 def admin_logout():
@@ -505,6 +583,7 @@ def admin_logout():
     return redirect(url_for("index"))
 
 
+# ---------------- DASHBOARD ----------------
 @app.route("/admin")
 @app.route("/admin/dashboard")
 @login_required
@@ -512,7 +591,7 @@ def admin_dashboard():
     orders = get_all_orders()
     products = get_all_products()
 
-    total_revenue = sum(float(order['total']) for order in orders)
+    total_revenue = sum(float(o["total"]) for o in orders)
 
     return render_template(
         "admin_dashboard.html",
@@ -523,13 +602,17 @@ def admin_dashboard():
     )
 
 
+# ---------------- PRODUCTS ----------------
 @app.route("/admin/products")
 @login_required
 def admin_products():
-    products = get_all_products()
-    return render_template("admin_products.html", products=products)
+    return render_template(
+        "admin_products.html",
+        products=get_all_products()
+    )
 
 
+# ---------------- ADD PRODUCT (SUPABASE READY STRUCTURE) ----------------
 @app.route("/admin/products/add", methods=["GET", "POST"])
 @login_required
 def admin_add_product():
@@ -551,32 +634,39 @@ def admin_add_product():
             flash("Price and stock must be valid numbers!", "error")
             return render_template("admin_add_product.html")
 
-        uploaded_files = request.files.getlist('images')
+        # ---------------- LOCAL UPLOAD (TEMP ONLY) ----------------
+        # ⚠️ Keep for now — later replace with Supabase Storage
+        uploaded_files = request.files.getlist("images")
         image_filenames = []
 
+        upload_folder = os.path.join(app.root_path, app.config["UPLOAD_FOLDER"])
+        os.makedirs(upload_folder, exist_ok=True)
+
         for file in uploaded_files:
-            if file.filename != '':
+            if file and file.filename:
                 if allowed_file(file.filename):
-                    os.makedirs(
-                        os.path.join(app.root_path, app.config['UPLOAD_FOLDER']),
-                        exist_ok=True
-                    )
 
                     filename = secure_filename(file.filename)
-                    unique_filename = f"sandy_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{filename}"
+                    unique_filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{filename}"
 
-                    file.save(
-                        os.path.join(app.root_path, app.config['UPLOAD_FOLDER'], unique_filename)
-                    )
-
+                    file.save(os.path.join(upload_folder, unique_filename))
                     image_filenames.append(unique_filename)
+
                 else:
-                    flash("Only JPG, PNG, GIF, WebP files allowed!", "error")
+                    flash("Only JPG, PNG, GIF, WebP allowed!", "error")
                     return render_template("admin_add_product.html")
 
         main_image = image_filenames[0] if image_filenames else None
 
-        add_product(name, description, price, main_image, image_filenames, stock, category)
+        add_product(
+            name,
+            description,
+            price,
+            main_image,
+            image_filenames,
+            stock,
+            category
+        )
 
         flash(f"✅ {name} added successfully!", "success")
         return redirect(url_for("admin_products"))
@@ -584,6 +674,7 @@ def admin_add_product():
     return render_template("admin_add_product.html")
 
 
+# ---------------- EDIT PRODUCT ----------------
 @app.route('/admin/products/<int:product_id>/edit')
 @login_required
 def admin_edit_product(product_id):
@@ -596,6 +687,7 @@ def admin_edit_product(product_id):
     return render_template('admin_edit_product.html', product=product)
 
 
+# ---------------- UPDATE PRODUCT ----------------
 @app.route("/admin/products/<int:product_id>/edit", methods=["POST"])
 @login_required
 def admin_update_product(product_id):
@@ -622,34 +714,33 @@ def admin_update_product(product_id):
         flash("Price and stock must be valid numbers!", "error")
         return render_template('admin_edit_product.html', product=product)
 
-    uploaded_file = request.files.get('image')
-    image_filename = product['image']
+    uploaded_file = request.files.get("image")
+    image_filename = product["image"]
 
-    if uploaded_file and uploaded_file.filename != '':
+    upload_folder = os.path.join(app.root_path, app.config["UPLOAD_FOLDER"])
+    os.makedirs(upload_folder, exist_ok=True)
+
+    # ---------------- IMAGE UPDATE ----------------
+    if uploaded_file and uploaded_file.filename:
         if allowed_file(uploaded_file.filename):
-            if product['image']:
-                old_path = os.path.join(app.config['UPLOAD_FOLDER'], product['image'])
+
+            # delete old image
+            if product["image"]:
+                old_path = os.path.join(upload_folder, product["image"])
                 if os.path.exists(old_path):
                     try:
                         os.remove(old_path)
-                    except:
-                        pass
-
-            os.makedirs(
-                os.path.join(app.root_path, app.config['UPLOAD_FOLDER']),
-                exist_ok=True
-            )
+                    except Exception as e:
+                        app.logger.warning(f"Delete failed: {e}")
 
             filename = secure_filename(uploaded_file.filename)
-            unique_filename = f"sandy_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{filename}"
+            unique_filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{filename}"
 
-            uploaded_file.save(
-                os.path.join(app.root_path, app.config['UPLOAD_FOLDER'], unique_filename)
-            )
-
+            uploaded_file.save(os.path.join(upload_folder, unique_filename))
             image_filename = unique_filename
+
         else:
-            flash("Only JPG, PNG, GIF, WebP files allowed!", "error")
+            flash("Invalid file type!", "error")
             return render_template('admin_edit_product.html', product=product)
 
     update_product(product_id, name, description, price, image_filename, stock)
@@ -658,6 +749,7 @@ def admin_update_product(product_id):
     return redirect(url_for("admin_products"))
 
 
+# ---------------- DELETE PRODUCT ----------------
 @app.route("/admin/products/delete/<int:product_id>", methods=["POST"])
 @login_required
 def admin_delete_product(product_id):
@@ -666,8 +758,13 @@ def admin_delete_product(product_id):
     if not product:
         return jsonify({"success": False, "message": "Product not found"}), 404
 
-    if product['image']:
-        image_path = os.path.join(app.root_path, app.config['UPLOAD_FOLDER'], product['image'])
+    # delete local image (TEMP system)
+    if product.get("image"):
+        image_path = os.path.join(
+            app.root_path,
+            app.config["UPLOAD_FOLDER"],
+            product["image"]
+        )
 
         if os.path.exists(image_path):
             try:
@@ -680,11 +777,16 @@ def admin_delete_product(product_id):
     return jsonify({"success": True})
 
 
+# ---------------- ADMIN ORDERS ----------------
 @app.route("/admin/orders")
 @login_required
 def admin_orders():
     orders = get_all_orders()
-    return render_template("admin_orders.html", orders=orders, single_order=False)
+    return render_template(
+        "admin_orders.html",
+        orders=orders,
+        single_order=False
+    )
 
 
 @app.route("/admin/orders/<int:order_id>")
@@ -696,7 +798,10 @@ def admin_order_detail(order_id):
         flash("Order not found", "danger")
         return redirect(url_for("admin_orders"))
 
-    order_items = json.loads(order["items"])
+    try:
+        order_items = json.loads(order["items"])
+    except Exception:
+        order_items = []
 
     return render_template(
         "admin_orders.html",
@@ -711,7 +816,9 @@ def admin_order_detail(order_id):
 def admin_update_order_status(order_id):
     new_status = request.form.get("status")
 
-    if new_status not in ["pending", "paid", "processing", "delivered", "cancelled"]:
+    valid_status = ["pending", "paid", "processing", "delivered", "cancelled"]
+
+    if new_status not in valid_status:
         flash("Invalid status!", "danger")
         return redirect(url_for("admin_order_detail", order_id=order_id))
 
@@ -721,24 +828,35 @@ def admin_update_order_status(order_id):
     return redirect(url_for("admin_order_detail", order_id=order_id))
 
 
+# ---------------- TRACK ORDER SEARCH ----------------
 @app.route("/track-order", methods=["GET", "POST"])
 def track_order_search():
     if request.method == "POST":
         order_id = request.form.get("order_id")
         email = request.form.get("email")
 
+        try:
+            order_id = int(order_id)
+        except (ValueError, TypeError):
+            flash("Invalid Order ID", "error")
+            return render_template("track_order_search.html")
+
         conn = get_db()
         cursor = conn.cursor()
 
-        cursor.execute(
-            "SELECT * FROM orders WHERE id = %s AND email = %s",
-            (order_id, email)
-        )
+        try:
+            cursor.execute(
+                """
+                SELECT * FROM orders
+                WHERE id = %s AND email = %s
+                """,
+                (order_id, email)
+            )
+            order = cursor.fetchone()
 
-        order = cursor.fetchone()
-
-        cursor.close()
-        conn.close()
+        finally:
+            cursor.close()
+            conn.close()
 
         if order:
             return redirect(url_for("track_order", order_id=order_id))
@@ -748,6 +866,7 @@ def track_order_search():
     return render_template("track_order_search.html")
 
 
+# ---------------- TRACK ORDER PAGE ----------------
 @app.route("/track-order/<int:order_id>")
 def track_order(order_id):
     order = get_order_by_id(order_id)
@@ -756,7 +875,10 @@ def track_order(order_id):
         flash("Order not found", "error")
         return redirect(url_for("index"))
 
-    order_items = json.loads(order["items"])
+    try:
+        order_items = json.loads(order["items"])
+    except Exception:
+        order_items = []
 
     return render_template(
         "track_order.html",
@@ -765,9 +887,7 @@ def track_order(order_id):
     )
 
 
+# ---------------- MAIN ----------------
 if __name__ == "__main__":
     init_db()
-
-    # ❌ REMOVED: SQLite PRAGMA (Postgres doesn't support it)
-
-    app.run(debug=True, host='0.0.0.0', port=6050)
+    app.run(debug=True, host="0.0.0.0", port=6050)
