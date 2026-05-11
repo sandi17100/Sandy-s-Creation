@@ -685,15 +685,22 @@ def admin_update_product(product_id):
     if uploaded_file and uploaded_file.filename:
         if allowed_file(uploaded_file.filename):
             filename = secure_filename(uploaded_file.filename)
-            unique_filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{filename}"
+            # Sandy ရဲ့ name လေးပါအောင် ထည့်ပေးထားတယ်နော်
+            unique_filename = f"sandy_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{filename}"
             
             file_data = uploaded_file.read()
+            # Supabase ကို upload တင်တယ်
             supabase.storage.from_("crochet-bucket").upload(
                 path=unique_filename,
                 file=file_data,
                 file_options={"content-type": uploaded_file.content_type}
             )
-            image_url = supabase.storage.from_("crochet-bucket").get_public_url(unique_filename)
+            
+            # အရေးကြီးဆုံးအပိုင်း- string တိုက်ရိုက်ရအောင် .public_url ကို ခေါ်ပေးရပါမယ်
+            res = supabase.storage.from_("crochet-bucket").get_public_url(unique_filename)
+            
+            # တချို့ version တွေမှာ res က object ဖြစ်နေတတ်လို့ string ပဲယူဖို့ အောက်ကလို ရေးပါ
+            image_url = res if isinstance(res, str) else res.public_url
 
     update_product(product_id, name, description, price, image_url, stock)
 
