@@ -10,157 +10,95 @@
     <div class="col-lg-6">
 
         {% if product.images %}
-
             <div class="row g-2">
-
                 {% for img in product.images %}
                 <div class="col-6 mb-2">
-
+                    <!-- Loop ပတ်တဲ့အခါ img တစ်ခုချင်းစီကို http စစ်ဆေးပါတယ် -->
                     <img src="{{ img if img.startswith('http') else url_for('static', filename='uploads/' + img) }}"
                          class="img-fluid rounded-3 shadow-sm"
                          alt="{{ product.name }}">
-
                 </div>
                 {% endfor %}
-
             </div>
 
         {% elif product.image %}
-
-            <!-- Single Image logic ကို ဒီမှာ သေချာပြင်ထားပါတယ် -->
+            <!-- ဒီနေရာမှာ Sandy ရဲ့ Code ဟောင်းက http မစစ်ဘဲ ရှိနေလို့ ပြင်ပေးထားပါတယ် -->
             <img src="{{ product.image if product.image.startswith('http') else url_for('static', filename='uploads/' + product.image) }}"
                  class="img-fluid rounded-4 shadow-lg"
                  style="max-height:500px; width: 100%; object-fit:cover;"
                  alt="{{ product.name }}">
 
         {% else %}
-
             <div class="bg-light rounded-4 d-flex align-items-center justify-content-center shadow-lg"
                  style="height:500px;">
-
-                <i class="fas fa-box-open"
-                   style="font-size:8rem;color:#ddd;"></i>
-
+                <i class="fas fa-box-open" style="font-size:8rem;color:#ddd;"></i>
             </div>
-
         {% endif %}
 
     </div>
 
-
     <!-- PRODUCT INFO -->
     <div class="col-lg-6">
-
         <div class="sticky-top" style="top:100px;">
-
-            <!-- NAME -->
             <h1 class="fw-bold mb-3">
                 {{ product.name or "Untitled Product" }}
             </h1>
 
-            <!-- PRICE -->
             <div class="price h2 text-primary fw-bold mb-4">
                 {{ "{:,.0f}".format(product.price or 0) }} MMK
             </div>
 
-            <!-- DESCRIPTION -->
             <div class="mb-4 p-4 bg-light rounded-3">
-
                 <h5>
                     <i class="fas fa-info-circle me-2 text-primary"></i>
                     About This Item
                 </h5>
-
                 <p class="mb-0">
                     {{ product.description or "No description available." }}
                 </p>
-
             </div>
 
-            <!-- INFO ROW -->
             <div class="row g-3 mb-4">
-
                 <div class="col">
                     <div class="d-flex align-items-center">
-
                         <i class="fas fa-warehouse text-success me-2"></i>
-
                         <strong>In Stock:</strong>
-
-                        <span class="ms-1">
-                            {{ product.stock or 0 }} available
-                        </span>
-
+                        <span class="ms-1">{{ product.stock or 0 }} available</span>
                     </div>
                 </div>
-
                 <div class="col">
                     <div class="d-flex align-items-center">
-
                         <i class="fas fa-truck text-info me-2"></i>
-
                         <strong>Free delivery:</strong>
                         <span class="ms-1">Yangon</span>
-
                     </div>
                 </div>
-
             </div>
 
-            <!-- BUTTONS -->
             <div class="d-grid gap-3">
-
                 <a href="{{ url_for('add_to_cart', product_id=product.id) }}"
                    class="btn btn-primary btn-lg rounded-pill py-3 fs-5 fw-bold">
-
-                    <i class="fas fa-cart-plus me-2"></i>
-                    Add to Cart
-
+                    <i class="fas fa-cart-plus me-2"></i> Add to Cart
                 </a>
-
                 <a href="{{ url_for('cart') }}"
                    class="btn btn-outline-primary btn-lg rounded-pill py-3">
-
-                    <i class="fas fa-shopping-cart me-2"></i>
-                    View Cart
-
+                    <i class="fas fa-shopping-cart me-2"></i> View Cart
                 </a>
-
                 <a href="{{ url_for('index') }}"
                    class="btn btn-outline-secondary btn-lg rounded-pill py-3">
-
                     ← Continue Shopping
-
                 </a>
-
             </div>
-
         </div>
-
     </div>
-
 </div>
 
-
-<!-- FOOTER INFO -->
 <div class="mt-5 pt-5">
-
-    <h3 class="fw-bold mb-4 text-center">
-        💝 Handmade with Love in Yangon
-    </h3>
-
+    <h3 class="fw-bold mb-4 text-center">💝 Handmade with Love in Yangon</h3>
     <div class="text-center">
-
-        <p class="lead text-muted">
-            Each piece is crafted with care using premium cotton yarn
-        </p>
-
-        <p>
-            <strong>Sandy Crochet</strong> - Yangon, Myanmar 🧶
-        </p>
-
+        <p class="lead text-muted">Each piece is crafted with care using premium cotton yarn</p>
+        <p><strong>Sandy Crochet</strong> - Yangon, Myanmar 🧶</p>
     </div>
-
 </div>
 
 {% endblock %}
