@@ -618,45 +618,45 @@ def admin_products():
 
 
 # ---------------- ADD PRODUCT (SUPABASE READY STRUCTURE) ----------------
+# --- ADMIN: ADD PRODUCT ---
 @app.route("/admin/products/add", methods=["GET", "POST"])
 @login_required
 def admin_add_product():
     if request.method == "POST":
-        name = request.form.get("name", "").strip()
-        description = request.form.get("description", "").strip()
-        price = request.form.get("price", "0")
-        stock = request.form.get("stock", "0")
-        category = request.form.get("category", "amigurumi")
+        name = request.form.get("name")
+        description = request.form.get("description")
+        price = float(request.form.get("price", 0))
+        stock = int(request.form.get("stock", 0))
 
-        if not all([name, description, price, stock]):
-            flash("Please fill all required fields!", "error")
-            return render_template("admin_add_product.html")
+        uploaded_file = request.files.get("image")
+        final_image_value = "" # ဒီကောင်က DB ထဲကို ရောက်မှာပါ
 
-        uploaded_files = request.files.getlist("images")
-        image_urls = []
+        if uploaded_file and uploaded_file.filename:
+            # 1. နာမည်သတ်မှတ်မယ်
+            filename = secure_filename(uploaded_file.filename)
+            unique_filename = f"sandy_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{filename}"
+            
+            # 2. Supabase ကို Upload တင်မယ်
+            file_data = uploaded_file.read()
+            supabase.storage.from_("crochet-bucket").upload(
+                path=unique_filename,
+                file=file_data,
+                file_options={"content-type": uploaded_file.content_type}
+            )
 
-        for file in uploaded_files:
-            if file and file.filename:
-                if allowed_file(file.filename):
-                    filename = secure_filename(file.filename)
-                    unique_filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{filename}"
-                    
-                    file_data = file.read()
-                    
-                    # Upload တင်မယ်
-                    supabase.storage.from_("crochet-bucket").upload(
-                        path=unique_filename,
-                        file=file_data,
-                        file_options={"content-type": file.content_type}
-                    )
-                    
-                    # URL string ကိုပဲ ယူမယ်
-                    res = supabase.storage.from_("crochet-bucket").get_public_url(unique_filename)
-                    image_urls.append(res) # res က URL string ဖြစ်ပါတယ်
-
-        main_image_url = image_urls[0] if image_urls else None
-
-        add_product(name, description, price, main_image_url, image_urls, stock, category)
+            # 3. *** အရေးကြီးဆုံးအချက် ***
+            # Public URL ကို ယူပြီး final_image_value ထဲ ထည့်မယ်
+            res = supabase.storage.from_("crochet-bucket").get_public_url(unique_filename)
+            
+            # res က string မဟုတ်ဘဲ object ဖြစ်နေရင် .public_url ကို ယူမယ်
+            if hasattr(res, 'public_url'):
+                final_image_value = res.public_url
+            else:
+                final_image_value = str(res)
+        
+        # 4. Database ထဲကို "final_image_value" (Link အပြည့်အစုံ) ကိုပဲ ထည့်ပါ
+        # နာမည်ပဲ ပါတဲ့ unique_filename ကို မထည့်ပါနဲ့
+        add_product_to_db(name, description, price, final_image_value, stock)
 
         flash(f"✅ {name} added successfully!", "success")
         return redirect(url_for("admin_products"))
