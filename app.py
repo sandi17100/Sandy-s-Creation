@@ -7,7 +7,11 @@ from psycopg2.extras import RealDictCursor
 import os
 import json
 from datetime import datetime
+from supabase import create_client
 
+SUPABASE_URL = os.environ.get("https://wykfmuslixwlfkybwqkz.supabase.co")
+SUPABASE_KEY = os.environ.get("sb_secret_ZNX9p6n9wRTfpQ98jipYfg_yuD3gaVR")
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # ---------------- APP INIT ----------------
 app = Flask(__name__)
 
@@ -627,43 +631,39 @@ def admin_add_product():
             flash("Please fill all required fields!", "error")
             return render_template("admin_add_product.html")
 
-        try:
-            price = float(price)
-            stock = int(stock)
-        except ValueError:
-            flash("Price and stock must be valid numbers!", "error")
-            return render_template("admin_add_product.html")
-
-        # ---------------- LOCAL UPLOAD (TEMP ONLY) ----------------
-        # ⚠️ Keep for now — later replace with Supabase Storage
+        # Supabase Storage သို့ Upload တင်ခြင်း
         uploaded_files = request.files.getlist("images")
-        image_filenames = []
-
-        upload_folder = os.path.join(app.root_path, app.config["UPLOAD_FOLDER"])
-        os.makedirs(upload_folder, exist_ok=True)
+        image_urls = []
 
         for file in uploaded_files:
             if file and file.filename:
                 if allowed_file(file.filename):
-
                     filename = secure_filename(file.filename)
                     unique_filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{filename}"
+                    
+                    file_data = file.read()
+                    
+                    # Supabase Storage သို့ ပို့မယ်
+                    supabase.storage.from_("crochet-bucket").upload(
+                        path=unique_filename,
+                        file=file_data,
+                        file_options={"content-type": file.content_type}
+                    )
+                    
+                    # Public URL ယူမယ်
+                    res = supabase.storage.from_("crochet-bucket").get_public_url(unique_filename)
+                    image_urls.append(res)
 
-                    file.save(os.path.join(upload_folder, unique_filename))
-                    image_filenames.append(unique_filename)
+        # ပထမဆုံးပုံကို main image အဖြစ်သုံးမယ်
+        main_image_url = image_urls[0] if image_urls else None
 
-                else:
-                    flash("Only JPG, PNG, GIF, WebP allowed!", "error")
-                    return render_template("admin_add_product.html")
-
-        main_image = image_filenames[0] if image_filenames else None
-
+        # Database ထဲ ထည့်မယ်
         add_product(
             name,
             description,
             price,
-            main_image,
-            image_filenames,
+            main_image_url, # image column
+            image_urls,     # images (JSONB) column
             stock,
             category
         )
@@ -673,21 +673,7 @@ def admin_add_product():
 
     return render_template("admin_add_product.html")
 
-
 # ---------------- EDIT PRODUCT ----------------
-@app.route('/admin/products/<int:product_id>/edit')
-@login_required
-def admin_edit_product(product_id):
-    product = get_product(product_id)
-
-    if not product:
-        flash("Product not found", "error")
-        return redirect(url_for("admin_products"))
-
-    return render_template('admin_edit_product.html', product=product)
-
-
-# ---------------- UPDATE PRODUCT ----------------
 @app.route("/admin/products/<int:product_id>/edit", methods=["POST"])
 @login_required
 def admin_update_product(product_id):
@@ -701,53 +687,28 @@ def admin_update_product(product_id):
     description = request.form.get("description", "").strip()
     price = request.form.get("price", "0")
     stock = request.form.get("stock", "0")
-    category = request.form.get("category", "amigurumi")
 
-    if not all([name, description, price, stock]):
-        flash("Please fill all required fields!", "error")
-        return render_template('admin_edit_product.html', product=product)
-
-    try:
-        price = float(price)
-        stock = int(stock)
-    except ValueError:
-        flash("Price and stock must be valid numbers!", "error")
-        return render_template('admin_edit_product.html', product=product)
-
+    # ပုံအသစ်တင်ရင် Supabase သို့ ပို့မယ်၊ မတင်ရင် အဟောင်းအတိုင်းထားမယ်
     uploaded_file = request.files.get("image")
-    image_filename = product["image"]
+    image_url = product["image"]
 
-    upload_folder = os.path.join(app.root_path, app.config["UPLOAD_FOLDER"])
-    os.makedirs(upload_folder, exist_ok=True)
-
-    # ---------------- IMAGE UPDATE ----------------
     if uploaded_file and uploaded_file.filename:
         if allowed_file(uploaded_file.filename):
-
-            # delete old image
-            if product["image"]:
-                old_path = os.path.join(upload_folder, product["image"])
-                if os.path.exists(old_path):
-                    try:
-                        os.remove(old_path)
-                    except Exception as e:
-                        app.logger.warning(f"Delete failed: {e}")
-
             filename = secure_filename(uploaded_file.filename)
             unique_filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S%f')}_{filename}"
+            
+            file_data = uploaded_file.read()
+            supabase.storage.from_("crochet-bucket").upload(
+                path=unique_filename,
+                file=file_data,
+                file_options={"content-type": uploaded_file.content_type}
+            )
+            image_url = supabase.storage.from_("crochet-bucket").get_public_url(unique_filename)
 
-            uploaded_file.save(os.path.join(upload_folder, unique_filename))
-            image_filename = unique_filename
-
-        else:
-            flash("Invalid file type!", "error")
-            return render_template('admin_edit_product.html', product=product)
-
-    update_product(product_id, name, description, price, image_filename, stock)
+    update_product(product_id, name, description, price, image_url, stock)
 
     flash(f"✅ {name} updated successfully!", "success")
     return redirect(url_for("admin_products"))
-
 
 # ---------------- DELETE PRODUCT ----------------
 @app.route("/admin/products/delete/<int:product_id>", methods=["POST"])
