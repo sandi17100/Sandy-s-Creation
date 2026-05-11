@@ -54,7 +54,7 @@
                         <label class="form-label fw-bold">Current Image 📸</label>
                         {% if product.image %}
                         <div class="text-center mb-3 p-3 bg-light rounded-4">
-                            <img src="{{ url_for('static', filename='uploads/' + product.image) }}" 
+                            <img src="{{ product.image }}" 
                                  class="rounded-4 shadow" style="width: 200px; height: 200px; object-fit: cover;">
                             <div class="mt-2">
                                 <small class="text-muted">{{ product.image }}</small>
