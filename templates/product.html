@@ -16,8 +16,10 @@
                 {% for img in product.images %}
                 <div class="col-6 mb-2">
 
-                    <img src="{{ product.image_url if product.image_url.startswith('http') else url_for('static', filename='uploads/' + product.image_url) }}""
-                         alt="{{ product.name }}>
+                    <!-- Loop variable 'img' ကို သုံးပြီး http စစ်ဆေးတဲ့ logic ကို ပြင်ပေးထားပါတယ် -->
+                    <img src="{{ img if img.startswith('http') else url_for('static', filename='uploads/' + img) }}"
+                         class="img-fluid rounded-3 shadow-sm"
+                         alt="{{ product.name }}">
 
                 </div>
                 {% endfor %}
@@ -26,9 +28,9 @@
 
         {% elif product.image %}
 
-            <img src="{{ product.image }}"
+            <img src="{{ product.image if product.image.startswith('http') else url_for('static', filename='uploads/' + product.image) }}"
                  class="img-fluid rounded-4 shadow-lg"
-                 style="max-height:500px;object-fit:cover;"
+                 style="max-height:500px; width: 100%; object-fit:cover;"
                  alt="{{ product.name }}">
 
         {% else %}
@@ -36,7 +38,7 @@
             <div class="bg-light rounded-4 d-flex align-items-center justify-content-center shadow-lg"
                  style="height:500px;">
 
-                <i class="fas fa-crochet"
+                <i class="fas fa-box-open"
                    style="font-size:8rem;color:#ddd;"></i>
 
             </div>
