@@ -28,7 +28,7 @@
 
         {% elif product.image %}
 
-            <img src="{{ product.image if product.image.startswith('http') else url_for('static', filename='uploads/' + product.image) }}"
+            <img src="{{ product.image }}" alt="{{ product.name }}" class="img-fluid">
                  class="img-fluid rounded-4 shadow-lg"
                  style="max-height:500px; width: 100%; object-fit:cover;"
                  alt="{{ product.name }}">
