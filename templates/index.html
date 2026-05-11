@@ -55,7 +55,7 @@
 
                     <!-- IMAGE -->
                     {% if product.image %}
-                        <img src="{{ url_for('static', filename='uploads/' + product.image) }}"
+                        <img src="{{ product.image }}"
                              class="img-fluid rounded-circle mb-3"
                              style="width:150px;height:150px;object-fit:cover;">
                     {% else %}
