@@ -16,7 +16,6 @@
                 {% for img in product.images %}
                 <div class="col-6 mb-2">
 
-                    <!-- Loop variable 'img' ကို သုံးပြီး http စစ်ဆေးတဲ့ logic ကို ပြင်ပေးထားပါတယ် -->
                     <img src="{{ img if img.startswith('http') else url_for('static', filename='uploads/' + img) }}"
                          class="img-fluid rounded-3 shadow-sm"
                          alt="{{ product.name }}">
@@ -28,7 +27,8 @@
 
         {% elif product.image %}
 
-            <img src="{{ product.image }}" alt="{{ product.name }}" class="img-fluid">
+            <!-- Single Image logic ကို ဒီမှာ သေချာပြင်ထားပါတယ် -->
+            <img src="{{ product.image if product.image.startswith('http') else url_for('static', filename='uploads/' + product.image) }}"
                  class="img-fluid rounded-4 shadow-lg"
                  style="max-height:500px; width: 100%; object-fit:cover;"
                  alt="{{ product.name }}">
