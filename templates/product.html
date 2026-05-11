@@ -14,7 +14,7 @@
                 {% for img in product.images %}
                 <div class="col-6 mb-2">
                     <!-- Loop ပတ်တဲ့အခါ img တစ်ခုချင်းစီကို http စစ်ဆေးပါတယ် -->
-                    <img src="{{ img if img.startswith('http') else url_for('static', filename='uploads/' + img) }}"
+                    <img src="{{ img }}" class="img-fluid rounded-3 shadow-sm" alt="{{ product.name }}">
                          class="img-fluid rounded-3 shadow-sm"
                          alt="{{ product.name }}">
                 </div>
@@ -23,7 +23,7 @@
 
         {% elif product.image %}
             <!-- ဒီနေရာမှာ Sandy ရဲ့ Code ဟောင်းက http မစစ်ဘဲ ရှိနေလို့ ပြင်ပေးထားပါတယ် -->
-            <img src="{{ product.image if product.image.startswith('http') else url_for('static', filename='uploads/' + product.image) }}"
+            <img src="{{ product.image }}" class="img-fluid rounded-4 shadow-lg" alt="{{ product.name }}">
                  class="img-fluid rounded-4 shadow-lg"
                  style="max-height:500px; width: 100%; object-fit:cover;"
                  alt="{{ product.name }}">
