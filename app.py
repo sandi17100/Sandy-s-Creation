@@ -9,8 +9,9 @@ import json
 from datetime import datetime
 from supabase import create_client
 
-SUPABASE_URL = os.environ.get("https://wykfmuslixwlfkybwqkz.supabase.co")
-SUPABASE_KEY = os.environ.get("sb_secret_ZNX9p6n9wRTfpQ98jipYfg_yuD3gaVR")
+# Credentials တွေကို String အနေနဲ့ တိုက်ရိုက်ပေးလိုက်ပါမယ်
+SUPABASE_URL = "https://wykfmuslixwlfkybwqkz.supabase.co"
+SUPABASE_KEY = "sb_secret_ZNX9p6n9wRTfpQ98jipYfg_yuD3gaVR"
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # ---------------- APP INIT ----------------
 app = Flask(__name__)
@@ -631,7 +632,6 @@ def admin_add_product():
             flash("Please fill all required fields!", "error")
             return render_template("admin_add_product.html")
 
-        # Supabase Storage သို့ Upload တင်ခြင်း
         uploaded_files = request.files.getlist("images")
         image_urls = []
 
@@ -643,30 +643,20 @@ def admin_add_product():
                     
                     file_data = file.read()
                     
-                    # Supabase Storage သို့ ပို့မယ်
+                    # Upload တင်မယ်
                     supabase.storage.from_("crochet-bucket").upload(
                         path=unique_filename,
                         file=file_data,
                         file_options={"content-type": file.content_type}
                     )
                     
-                    # Public URL ယူမယ်
+                    # URL string ကိုပဲ ယူမယ်
                     res = supabase.storage.from_("crochet-bucket").get_public_url(unique_filename)
-                    image_urls.append(res)
+                    image_urls.append(res) # res က URL string ဖြစ်ပါတယ်
 
-        # ပထမဆုံးပုံကို main image အဖြစ်သုံးမယ်
         main_image_url = image_urls[0] if image_urls else None
 
-        # Database ထဲ ထည့်မယ်
-        add_product(
-            name,
-            description,
-            price,
-            main_image_url, # image column
-            image_urls,     # images (JSONB) column
-            stock,
-            category
-        )
+        add_product(name, description, price, main_image_url, image_urls, stock, category)
 
         flash(f"✅ {name} added successfully!", "success")
         return redirect(url_for("admin_products"))
@@ -719,20 +709,8 @@ def admin_delete_product(product_id):
     if not product:
         return jsonify({"success": False, "message": "Product not found"}), 404
 
-    # delete local image (TEMP system)
-    if product.get("image"):
-        image_path = os.path.join(
-            app.root_path,
-            app.config["UPLOAD_FOLDER"],
-            product["image"]
-        )
-
-        if os.path.exists(image_path):
-            try:
-                os.remove(image_path)
-            except Exception as e:
-                app.logger.warning(f"Image delete failed: {e}")
-
+    # Database ကနေပဲ တိုက်ရိုက်ဖျက်ချင်ရင် delete_product(product_id) ကိုပဲ ခေါ်ပါမယ်
+    # Supabase Storage ထဲကပုံကိုပါ တစ်ခါတည်းဖျက်ချင်ရင်တော့ supabase.storage.from_().remove() သုံးလို့ရပါတယ်။
     delete_product(product_id)
 
     return jsonify({"success": True})
